@@ -5,7 +5,7 @@
 
 pkgname=switch-ffmpeg
 pkgver=4.0.1
-pkgrel=2
+pkgrel=3
 pkgdesc='ffmpeg port (for Nintendo Switch homebrew development)'
 arch=('any')
 url='https://ffmpeg.org/'
@@ -17,7 +17,7 @@ depends=('switch-zlib' 'switch-bzip2' 'switch-libass' 'switch-libfribidi'
 source=("https://ffmpeg.org/releases/ffmpeg-$pkgver.tar.xz" "ffmpeg.patch")
 sha256sums=(
  '605f5c01c60db35d3b617a79cabb2c7032412be243554602eeed1b628125c0ee'
- '8c564b84c4476f7f3dc60307af467b9ce671b8dffe05beea31883f614f361e16'
+ '07e569a24ec373362f4c93b93f536563d6301f746f1fca1de0817c41bb26cd49'
 )
 groups=('switch-portlibs')
 

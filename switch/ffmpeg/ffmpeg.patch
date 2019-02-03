@@ -1,19 +1,218 @@
+diff -NBaur ffmpeg-4.0.1.old/compat/libnxthreads.c ffmpeg-4.0.1.new/compat/libnxthreads.c
+--- ffmpeg-4.0.1.old/compat/libnxthreads.c	1969-12-31 17:00:00.000000000 -0700
++++ ffmpeg-4.0.1.new/compat/libnxthreads.c	2019-02-03 00:13:20.808232600 -0700
+@@ -0,0 +1,123 @@
++#include "libnxthreads.h"
++#include <switch.h>
++#include <stdio.h>
++
++int pthread_create(pthread_t *thread, const void *attr, void *(*start_routine)(void*), void *arg)
++{
++    Result rc;
++    int priority;
++
++    // Get the priority of the calling thread
++    svcGetThreadPriority(&priority, CUR_THREAD_HANDLE);
++    
++    // Allocate memory for this thread structure, since pthread_t is void*
++    *thread = malloc(sizeof(Thread));
++    if (!*thread) {
++        return -1;
++    }
++
++    rc = threadCreate(*thread, (void (*)(void *))start_routine, arg, 0x10000, priority, -2);
++    if (R_FAILED(rc)) {
++        return -1;
++    }
++
++    rc = threadStart(*thread);
++    if (R_FAILED(rc)) {
++        return -1;
++    }
++
++    return 0;
++}
++
++int pthread_join(pthread_t thread, void **value_ptr)
++{
++    threadWaitForExit(thread);
++    threadClose(thread);
++    free(thread);
++    
++    return 0;
++}
++
++int pthread_mutex_init(pthread_mutex_t *mutex, const void *attr)
++{
++    *mutex = malloc(sizeof(Mutex));
++    mutexInit(*mutex);
++
++    return 0;
++}
++
++int pthread_mutex_destroy(pthread_mutex_t *mutex)
++{
++    free(*mutex);
++
++    return 0;
++}
++
++int pthread_mutex_lock(pthread_mutex_t *mutex)
++{
++    mutexLock(*mutex);
++
++    return 0;
++}
++
++int pthread_mutex_unlock(pthread_mutex_t *mutex)
++{
++    mutexUnlock(*mutex);
++
++    return 0;
++}
++
++int pthread_cond_init(pthread_cond_t *cond, const void *attr)
++{
++    *cond = malloc(sizeof(CondVar));
++    condvarInit(*cond);
++
++    return 0;
++}
++
++int pthread_cond_destroy(pthread_cond_t *cond)
++{
++    free(*cond);
++    
++    return 0;
++}
++
++int pthread_cond_signal(pthread_cond_t *cond)
++{
++    condvarWakeOne(*cond);
++
++    return 0;
++}
++
++int pthread_cond_broadcast(pthread_cond_t *cond)
++{
++    condvarWakeAll(*cond);
++
++    return 0;
++}
++
++int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex)
++{
++    condvarWait(*cond, *mutex);
++
++    return 0;
++}
++
++int pthread_once(pthread_once_t *once_control, void (*init_routine)(void))
++{
++    if (!once_control->done)
++    {
++        mutexLock(&once_control->mtx);
++
++        if (!once_control->done)
++        {
++            init_routine();
++
++            once_control->done = 1;
++        }
++
++        mutexUnlock(&once_control->mtx);
++    }
++
++    return 0;
++}
+\ No newline at end of file
+diff -NBaur ffmpeg-4.0.1.old/compat/libnxthreads.h ffmpeg-4.0.1.new/compat/libnxthreads.h
+--- ffmpeg-4.0.1.old/compat/libnxthreads.h	1969-12-31 17:00:00.000000000 -0700
++++ ffmpeg-4.0.1.new/compat/libnxthreads.h	2019-02-03 00:13:41.001806800 -0700
+@@ -0,0 +1,37 @@
++/**
++ * @file
++ * libnx threads to pthreads wrapper
++ */
++
++#ifndef COMPAT_LIBNXTHREADS_H
++#define COMPAT_LIBNXTHREADS_H
++
++#include <stdlib.h>
++#include <sys/lock.h>
++
++typedef struct {
++    volatile int done;
++    _LOCK_T mtx;
++} pthread_once_t;
++
++#define PTHREAD_MUTEX_INITIALIZER 0
++#define PTHREAD_COND_INITIALIZER 0
++#define PTHREAD_ONCE_INIT {0, 0}
++
++int pthread_create(pthread_t *thread, const void *attr, void *(*start_routine)(void*), void *arg);
++int pthread_join(pthread_t thread, void **value_ptr);
++
++int pthread_mutex_init(pthread_mutex_t *mutex, const void *attr);
++int pthread_mutex_destroy(pthread_mutex_t *mutex);
++int pthread_mutex_lock(pthread_mutex_t *mutex);
++int pthread_mutex_unlock(pthread_mutex_t *mutex);
++
++int pthread_cond_init(pthread_cond_t *cond, const void *attr);
++int pthread_cond_destroy(pthread_cond_t *cond);
++int pthread_cond_signal(pthread_cond_t *cond);
++int pthread_cond_broadcast(pthread_cond_t *cond);
++int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
++
++int pthread_once(pthread_once_t *once_control, void (*init_routine)(void));
++
++#endif /* COMPAT_LIBNXTHREADS_H */
 diff -NBaur ffmpeg-4.0.1.old/configure ffmpeg-4.0.1.new/configure
---- ffmpeg-4.0.1.old/configure	2018-06-16 02:12:16.000000000 +0100
-+++ ffmpeg-4.0.1.new/configure	2019-02-01 09:37:02.607342895 +0000
-@@ -5250,6 +5250,9 @@
+--- ffmpeg-4.0.1.old/configure	2019-02-02 21:20:14.960750500 -0700
++++ ffmpeg-4.0.1.new/configure	2019-02-03 00:15:02.716075800 -0700
+@@ -136,6 +136,7 @@
+   --disable-pthreads       disable pthreads [autodetect]
+   --disable-w32threads     disable Win32 threads [autodetect]
+   --disable-os2threads     disable OS/2 threads [autodetect]
++  --disable-libnxthreads   disable Switch libnx threads [autodetect]
+   --disable-network        disable network support [no]
+   --disable-dct            disable DCT code
+   --disable-dwt            disable DWT code
+@@ -1853,6 +1854,7 @@
+     pthreads
+     os2threads
+     w32threads
++    libnxthreads
+ "
+ 
+ ATOMICS_LIST="
+@@ -5250,6 +5252,14 @@
          ;;
      minix)
          ;;
 +    horizon)
++        # Redefine pthread types from devkitA64 to libnx threading types
++        add_cppflags '-D_SYS__PTHREADTYPES_H_ -Dpthread_t="void*" -Dpthread_attr_t="void*" -Dpthread_mutex_t="void*" -Dpthread_mutexattr_t="void*" -Dpthread_cond_t="void*" -Dpthread_condattr_t="void*"'
++        add_ldflags -lnx
++        enable_weak libnxthreads
++        add_compat libnxthreads.o
 +        network_extralibs="-lnx"
 +        ;;
      none)
          ;;
      *)
+@@ -5901,7 +5911,7 @@
+ 
+ # check for some common methods of building with pthread support
+ # do this before the optional library checks as some of them require pthreads
+-if ! disabled pthreads && ! enabled w32threads && ! enabled os2threads; then
++if ! disabled pthreads && ! enabled w32threads && ! enabled os2threads && ! enabled libnxthreads; then
+     if check_lib pthreads pthread.h pthread_join   -pthread &&
+        check_lib pthreads pthread.h pthread_create -pthread; then
+         add_cflags -pthread
 diff -NBaur ffmpeg-4.0.1.old/libavfilter/vf_drawtext.c ffmpeg-4.0.1.new/libavfilter/vf_drawtext.c
---- ffmpeg-4.0.1.old/libavfilter/vf_drawtext.c	2018-04-20 11:02:57.000000000 +0100
-+++ ffmpeg-4.0.1.new/libavfilter/vf_drawtext.c	2019-02-01 09:31:26.128712790 +0000
+--- ffmpeg-4.0.1.old/libavfilter/vf_drawtext.c	2019-02-02 21:20:14.970218400 -0700
++++ ffmpeg-4.0.1.new/libavfilter/vf_drawtext.c	2019-02-02 20:55:27.731910600 -0700
 @@ -37,7 +37,9 @@
  #if HAVE_UNISTD_H
  #include <unistd.h>
@@ -41,3 +240,36 @@ diff -NBaur ffmpeg-4.0.1.old/libavfilter/vf_drawtext.c ffmpeg-4.0.1.new/libavfil
  
      if (argc == 3)
          av_strlcatf(fmt_str, sizeof(fmt_str), "0%u", positions);
+diff -NBaur ffmpeg-4.0.1.old/libavutil/slicethread.c ffmpeg-4.0.1.new/libavutil/slicethread.c
+--- ffmpeg-4.0.1.old/libavutil/slicethread.c	2019-02-02 21:20:14.980229800 -0700
++++ ffmpeg-4.0.1.new/libavutil/slicethread.c	2019-02-02 20:55:27.741917400 -0700
+@@ -22,7 +22,7 @@
+ #include "thread.h"
+ #include "avassert.h"
+ 
+-#if HAVE_PTHREADS || HAVE_W32THREADS || HAVE_OS2THREADS
++#if HAVE_PTHREADS || HAVE_W32THREADS || HAVE_OS2THREADS || HAVE_LIBNXTHREADS
+ 
+ typedef struct WorkerContext {
+     AVSliceThread   *ctx;
+diff -NBaur ffmpeg-4.0.1.old/libavutil/thread.h ffmpeg-4.0.1.new/libavutil/thread.h
+--- ffmpeg-4.0.1.old/libavutil/thread.h	2019-02-02 21:20:14.990229400 -0700
++++ ffmpeg-4.0.1.new/libavutil/thread.h	2019-02-02 20:55:27.749909400 -0700
+@@ -24,7 +24,7 @@
+ 
+ #include "config.h"
+ 
+-#if HAVE_PTHREADS || HAVE_W32THREADS || HAVE_OS2THREADS
++#if HAVE_PTHREADS || HAVE_W32THREADS || HAVE_OS2THREADS || HAVE_LIBNXTHREADS
+ 
+ #if HAVE_PTHREADS
+ #include <pthread.h>
+@@ -127,6 +127,8 @@
+ #define pthread_once           strict_pthread_once
+ #endif
+ 
++#elif HAVE_LIBNXTHREADS
++#include "compat/libnxthreads.h"
+ #elif HAVE_OS2THREADS
+ #include "compat/os2threads.h"
+ #else
